@@ -1,0 +1,65 @@
+@import "tailwindcss";
+
+@theme {
+  --font-pixel: "Press Start 2P", system-ui, sans-serif;
+  --font-mono: 'Courier New', Courier, monospace;
+}
+
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+:root {
+  --bg-dark: #12121e;
+  --surface: #1e1e2f;
+  --text-main: #e0e0e0;
+  --accent-mental: #ff6b6b;
+  --accent-energy: #ffd93d;
+  --accent-happiness: #6bc1ff;
+  --accent-independence: #6bff91;
+  --border-color: #3f3f5f;
+}
+
+* {
+  box-sizing: border-box;
+  image-rendering: pixelated;
+}
+
+body {
+  background-color: var(--bg-dark);
+  color: var(--text-main);
+  font-family: var(--font-pixel);
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.game-scene {
+  flex: 1;
+  position: relative;
+  background: linear-gradient(to bottom, #12121e 0%, #1e1e2f 100%);
+  overflow: hidden;
+}
+
+.room {
+  transition: background-color 2s ease, filter 2s ease;
+}
+
+.stage-burnout { filter: grayscale(0.8) brightness(0.5); }
+.stage-recovering { filter: grayscale(0.4) brightness(0.7); }
+.stage-routine { filter: grayscale(0.1) brightness(0.9); }
+.stage-social { filter: none; }
+
+@keyframes critical-flash {
+  0% { background-color: rgba(255, 0, 0, 0); }
+  50% { background-color: rgba(255, 0, 0, 0.15); }
+  100% { background-color: rgba(255, 0, 0, 0); }
+}
+
+.critical-overlay {
+  animation: critical-flash 0.5s infinite;
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+}
