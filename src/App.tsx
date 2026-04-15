@@ -7,7 +7,6 @@ import { useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Battery, 
-  Heart, 
   Brain, 
   TrendingUp, 
   Moon, 
@@ -29,7 +28,13 @@ import {
   Package,
   Construction,
   Hand,
-  Flame
+  Flame,
+  Dumbbell,
+  PenTool,
+  Home,
+  Heart,
+  Coins,
+  MessageCircle
 } from 'lucide-react';
 import { Stats, GameStage, GameEvent, STAGE_THRESHOLD } from './types';
 import { INITIAL_STATS, EVENTS } from './constants';
@@ -39,16 +44,20 @@ export default function App() {
   const [stage, setStage] = useState<GameStage>('번아웃 / 휴식 중');
   const [currentEvent, setCurrentEvent] = useState<GameEvent | null>(null);
   const [eventOutcome, setEventOutcome] = useState<string | null>(null);
-  const [day, setDay] = useState(1);
+  const [day, setDay] = useState(0);
   const [logs, setLogs] = useState<string[]>(['다시 오신 걸 환영합니다. 쉬어도 괜찮아요.']);
   
   const [nickname, setNickname] = useState<string>('');
   const [tempNickname, setTempNickname] = useState<string>('');
   const [isNameSet, setIsNameSet] = useState<boolean>(false);
   const [nameAlert, setNameAlert] = useState<string | null>(null);
-  const [eventInterval, setEventInterval] = useState<number>(60000); // Default 1 minute
-  const [activeTab, setActiveTab] = useState<'basic' | 'livelihood' | 'dopamine' | 'consumption'>('basic');
+  const [eventInterval, setEventInterval] = useState<number>(20000); // Default 20 seconds
+  const [activeTab, setActiveTab] = useState<'basic' | 'livelihood' | 'dopamine' | 'consumption' | 'independence'>('basic');
   const [reasonAlert, setReasonAlert] = useState<string | null>(null);
+  const [showDisclaimer, setShowDisclaimer] = useState<number>(1); // 0: hidden, 1: first, 2: second
+  const [ending, setEnding] = useState<{ title: string, description: string, lesson: string } | null>(null);
+  const [lowStatWarning, setLowStatWarning] = useState<string | null>(null);
+  const [nextEventTimer, setNextEventTimer] = useState<number | null>(null);
 
   // Stage progression logic
   useEffect(() => {
@@ -63,29 +72,131 @@ export default function App() {
     }
   }, [stats.mental, stats.independence]);
 
-  // Idle mechanic: stats change over time
+  // Idle mechanic: stats change over time (Dynamic decay based on day)
   useEffect(() => {
+    if (ending || showDisclaimer !== 0 || !isNameSet) return;
     const interval = setInterval(() => {
       setStats(prev => {
         const newStats = { ...prev };
-        newStats.happiness = Math.max(0, prev.happiness - 0.5);
-        newStats.mental = Math.max(0, prev.mental - 0.2);
-        newStats.energy = Math.min(100, prev.energy + 1);
+        // Day 1-10: Very slow decay, Day 11+: Normal decay
+        const decayMultiplier = day <= 10 ? 0.2 : 0.6;
+        
+        newStats.happiness = Math.max(0, prev.happiness - (0.2 * decayMultiplier));
+        newStats.mental = Math.max(0, prev.mental - (0.05 * decayMultiplier));
+        newStats.energy = Math.min(100, prev.energy + (0.8 / decayMultiplier)); 
         return newStats;
       });
     }, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [ending, showDisclaimer, isNameSet, day]);
 
-  // Day cycle and random events
+  // Event Trigger Logic
+  const triggerEvent = useCallback(() => {
+    const randomEvent = EVENTS[Math.floor(Math.random() * EVENTS.length)];
+    setCurrentEvent(randomEvent);
+    setDay(d => {
+      const nextDay = d + 1;
+      
+      // Check for endings at Day 25 (approx 8-10 mins)
+      if (nextDay >= 25) {
+        // We use a functional update for stats if needed, but here we can check the current stats state
+        // Note: stats might be slightly stale if not careful, but for ending check it's usually fine
+        if (stats.independence >= 80 && stats.mental >= 70) {
+          setEnding({
+            title: "🌅 진정한 자립: 새벽의 빛",
+            description: "당신은 마침내 스스로의 발로 일어섰습니다. 더 이상 도파민의 노예도, 타인의 시선에 갇힌 죄수도 아닙니다.",
+            lesson: "철학적 성찰: 자립이란 홀로 서는 것이 아니라, 어떤 풍파에도 흔들리지 않는 내면의 뿌리를 내리는 과정입니다."
+          });
+        } else if (stats.happiness >= 70 && stats.mental < 30) {
+          setEnding({
+            title: "🍼 고딩엄빠: 준비되지 않은 무게",
+            description: "순간의 도파민과 쾌락은 당신에게 감당할 수 없는 생명의 무게를 안겨주었습니다. TV 프로그램의 주인공이 된 당신의 눈엔 눈물이 고입니다.",
+            lesson: "철학적 성찰: 찰나의 즐거움은 영원한 책임으로 돌아오기도 합니다. 삶의 무게를 견딜 근육을 키우지 못한 채 마주한 책임은 비극이 됩니다."
+          });
+        } else if (stats.mental < 20 && stats.happiness < 20) {
+          setEnding({
+            title: "🏚️ 이혼숙려캠프: 깨진 거울",
+            description: "불안정한 감정으로 맺은 관계는 결국 서로에게 상처만 남겼습니다. 차가운 법정의 공기만이 당신을 감쌉니다.",
+            lesson: "철학적 성찰: 타인을 사랑하기 위해서는 먼저 온전한 자신을 사랑할 줄 알아야 합니다. 깨진 거울은 결코 아름다운 모습을 비출 수 없습니다."
+          });
+        } else if (stats.independence >= 70 && stats.mental < 40) {
+          setEnding({
+            title: "🎒 가출: 길 위의 방랑자",
+            description: "모든 것을 버리고 집을 나섰습니다. 자유를 찾았다고 생각했지만, 당신이 마주한 것은 더 큰 고립이었습니다.",
+            lesson: "철학적 성찰: 목적지 없는 자유는 방황일 뿐입니다. 진정한 탈출은 장소를 옮기는 것이 아니라 마음을 바꾸는 것입니다."
+          });
+        } else {
+          setEnding({
+            title: "🌫️ 고독사: 침묵의 방",
+            description: "아무도 찾지 않는 방, 도파민의 잔해만이 굴러다닙니다. 당신의 존재는 서서히 잊혀져 갑니다.",
+            lesson: "철학적 성찰: 관계의 끈을 놓고 오직 자신만을 위해 살았던 삶의 끝은 차가운 침묵뿐입니다. 인간은 타인의 기억 속에서 비로소 살아있음을 증명받습니다."
+          });
+        }
+      }
+      return nextDay;
+    });
+  }, [stats]);
+
+  // Initial Event Trigger
   useEffect(() => {
-    const dayInterval = setInterval(() => {
-      setDay(d => d + 1);
-      const randomEvent = EVENTS[Math.floor(Math.random() * EVENTS.length)];
-      setCurrentEvent(randomEvent);
-    }, eventInterval); 
-    return () => clearInterval(dayInterval);
-  }, [eventInterval]);
+    if (showDisclaimer === 0 && isNameSet && day === 0 && !currentEvent && !ending) {
+      // Small delay to ensure UI is ready after name input
+      const timer = setTimeout(() => {
+        triggerEvent();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [showDisclaimer, isNameSet, day, currentEvent, ending, triggerEvent]);
+
+  // Peace-time Timer Logic
+  useEffect(() => {
+    if (ending || showDisclaimer !== 0 || !isNameSet || currentEvent) {
+      setNextEventTimer(null);
+      return;
+    }
+
+    // If no event and no timer, start timer
+    if (nextEventTimer === null) {
+      setNextEventTimer(20);
+      return;
+    }
+
+    const timer = setInterval(() => {
+      setNextEventTimer(prev => {
+        if (prev === null) return null;
+        if (prev <= 1) {
+          triggerEvent();
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [ending, showDisclaimer, isNameSet, currentEvent, nextEventTimer, triggerEvent]);
+
+  // Critical Stat Endings & Warnings
+  useEffect(() => {
+    if (ending) return;
+
+    // Warnings
+    if (stats.energy < 10) {
+      setLowStatWarning("⚠️ 에너지가 위험 수준입니다! 휴식이 필요합니다.");
+    } else if (stats.mental < 10) {
+      setLowStatWarning("⚠️ 정신력이 바닥났습니다! 멘탈 관리가 시급합니다.");
+    } else {
+      setLowStatWarning(null);
+    }
+
+    // Prevent early death: Only allow failure endings after Day 5
+    if (day > 5 && (stats.mental <= 0 || stats.energy <= 0)) {
+      setEnding({
+        title: "🚫 중도 탈락: 멈춰버린 시간",
+        description: "당신의 몸과 마음이 한계에 도달했습니다. 더 이상 한 발자국도 내디딜 수 없습니다.",
+        lesson: "철학적 성찰: 멈춤은 실패가 아니라 재정비를 위한 신호입니다. 하지만 다시 일어서기 위해서는 이전과는 다른 길이 필요할 것입니다."
+      });
+    }
+  }, [stats, ending, day]);
 
   const addLog = useCallback((msg: string) => {
     setLogs(prev => [msg, ...prev].slice(0, 5));
@@ -204,6 +315,64 @@ export default function App() {
           next.independence = Math.max(0, prev.independence - 40);
           addLog('월 500만원 장기렌트를 계약했습니다. 이제 나는 카푸어입니다.');
           break;
+        case 'study':
+          next.independence = Math.min(100, prev.independence + 5);
+          next.energy = Math.max(0, prev.energy - 15);
+          next.mental = Math.max(0, prev.mental - 5);
+          addLog('자격증 공부를 하며 미래를 준비합니다.');
+          break;
+        case 'save':
+          next.independence = Math.min(100, prev.independence + 3);
+          next.money = Math.max(0, prev.money - 50000);
+          addLog('적금을 부으며 경제적 자립을 꿈꿉니다.');
+          break;
+        case 'volunteer':
+          next.independence = Math.min(100, prev.independence + 4);
+          next.mental = Math.min(100, prev.mental + 10);
+          next.energy = Math.max(0, prev.energy - 10);
+          addLog('봉사활동을 통해 사회의 일원임을 느낍니다.');
+          break;
+        case 'therapy':
+          next.independence = Math.min(100, prev.independence + 2);
+          next.mental = Math.min(100, prev.mental + 20);
+          next.money = Math.max(0, prev.money - 50000);
+          addLog('심리 상담을 통해 내면을 단단하게 다집니다.');
+          break;
+        case 'exercise':
+          next.independence = Math.min(100, prev.independence + 5);
+          next.energy = Math.max(0, prev.energy - 20);
+          addLog('땀을 흘리며 운동을 하니 몸이 가벼워집니다.');
+          break;
+        case 'reading':
+          next.independence = Math.min(100, prev.independence + 3);
+          next.mental = Math.min(100, prev.mental + 10);
+          addLog('책 속에서 새로운 세상을 발견합니다.');
+          break;
+        case 'resume':
+          next.independence = Math.min(100, prev.independence + 10);
+          next.mental = Math.min(100, prev.mental + 5);
+          next.happiness = Math.max(0, prev.happiness - 10);
+          addLog('이력서를 쓰며 미래를 설계하지만 마음 한구석이 무겁습니다.');
+          break;
+        case 'study_hard':
+          next.independence = Math.min(100, prev.independence + 8);
+          next.mental = Math.min(100, prev.mental + 5);
+          next.happiness = Math.max(0, prev.happiness - 15);
+          addLog('치열하게 공부하며 자립의 기반을 닦습니다.');
+          break;
+        case 'move_out':
+          next.independence = Math.max(0, prev.independence - 20);
+          next.energy = Math.max(0, prev.energy - 30);
+          next.mental = Math.max(0, prev.mental - 20);
+          next.money = Math.max(0, prev.money - 1000000);
+          next.happiness = Math.min(100, prev.happiness + 50);
+          addLog('드디어 독립했습니다! 힘들지만 나만의 공간이 생겨 행복합니다.');
+          break;
+        case 'dating':
+          next.happiness = Math.min(100, prev.happiness + 40);
+          next.money = Math.max(0, prev.money - 150000);
+          addLog('사랑하는 사람과 시간을 보내니 세상이 아름다워 보입니다.');
+          break;
       }
       return next;
     });
@@ -256,8 +425,21 @@ export default function App() {
                     수정
                   </button>
                 </div>
-                <div className="text-xl text-[#ffd93d]">DAY {day}</div>
+                <div className="text-xl text-[#ffd93d]">DAY {day} <span className="text-[10px] text-white/30">/ 25</span></div>
                 <div className="text-[10px] text-white/70">{stage}</div>
+                {nextEventTimer !== null && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <div className="h-1 w-24 bg-[#3f3f5f] rounded-full overflow-hidden">
+                      <motion.div 
+                        initial={{ width: "100%" }}
+                        animate={{ width: `${(nextEventTimer / 20) * 100}%` }}
+                        transition={{ duration: 1, ease: "linear" }}
+                        className="h-full bg-[#ffd93d]"
+                      />
+                    </div>
+                    <div className="text-[8px] text-white/50 font-mono">{nextEventTimer}s</div>
+                  </div>
+                )}
               </div>
               <div className="text-right">
                 <div className="text-xs text-[#888]">{stats.money.toLocaleString()} KRW</div>
@@ -398,7 +580,8 @@ export default function App() {
               { id: 'basic', label: '기본' },
               { id: 'livelihood', label: '생계활동' },
               { id: 'dopamine', label: '도파민' },
-              { id: 'consumption', label: '소비탭' }
+              { id: 'consumption', label: '소비탭' },
+              { id: 'independence', label: '자립도' }
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -561,16 +744,120 @@ export default function App() {
                 />
               </>
             )}
+            {activeTab === 'independence' && (
+              <>
+                <ActionButton 
+                  icon={<Dumbbell size={20} />} 
+                  label="운동하기" 
+                  cost="I+, E--" 
+                  onClick={() => handleAction('exercise')} 
+                  disabled={stats.energy < 20} 
+                  onDisabledClick={() => setReasonAlert('운동할 에너지가 부족합니다. (최소 20 필요)')}
+                />
+                <ActionButton 
+                  icon={<BookOpen size={20} />} 
+                  label="독서" 
+                  cost="I+, M+" 
+                  onClick={() => handleAction('reading')} 
+                />
+                <ActionButton 
+                  icon={<PenTool size={20} />} 
+                  label="이력서 쓰기" 
+                  cost="I++, M+, H-" 
+                  onClick={() => handleAction('resume')} 
+                  disabled={stats.mental < 10} 
+                  onDisabledClick={() => setReasonAlert('이력서를 쓸 멘탈이 부족합니다. (최소 10 필요)')}
+                />
+                <ActionButton 
+                  icon={<BookOpen size={20} />} 
+                  label="공부하기" 
+                  cost="I++, M+, H--" 
+                  onClick={() => handleAction('study_hard')} 
+                  disabled={stats.energy < 20} 
+                  onDisabledClick={() => setReasonAlert('공부할 에너지가 부족합니다. (최소 20 필요)')}
+                />
+                <ActionButton 
+                  icon={<Home size={20} />} 
+                  label="독립하기" 
+                  cost="H+++, I-, E-, M-, ₩--" 
+                  onClick={() => handleAction('move_out')} 
+                  disabled={stats.money < 1000000} 
+                  onDisabledClick={() => setReasonAlert('독립 자금 1,000,000원이 부족합니다.')}
+                />
+                <ActionButton 
+                  icon={<Heart size={20} />} 
+                  label="연애하기" 
+                  cost="H+++, ₩--" 
+                  onClick={() => handleAction('dating')} 
+                  disabled={stats.money < 150000} 
+                  onDisabledClick={() => setReasonAlert('데이트 비용 150,000원이 부족합니다.')}
+                />
+              </>
+            )}
           </div>
         </div>
 
-        {/* Initial Name Input Modal */}
-        <AnimatePresence>
-          {!isNameSet && (
-            <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/95">
+        {/* Initial Modals Flow */}
+        <AnimatePresence mode="wait">
+          {showDisclaimer === 1 ? (
+            <div key="disclaimer1" className="fixed inset-0 z-[300] flex items-center justify-center p-6 bg-black">
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                className="w-full max-w-md p-8 border-4 border-[#ffd93d] bg-[#1e1e2f] text-center"
+              >
+                <AlertCircle className="mx-auto text-[#ffd93d] mb-4" size={48} />
+                <h2 className="text-lg text-[#ffd93d] mb-4 font-bold">👋 안녕하세요, 김수지입니다.</h2>
+                <p className="text-xs text-white leading-relaxed mb-8">
+                  안녕하세요. 김수지입니다.<br/><br/>
+                  이 게임은 현실과 다릅니다.<br/>
+                  당신의 인생에서는 결코 일어나지 않을,<br/>
+                  나쁜 일들만 모아 만들어졌습니다.<br/><br/>
+                  이곳에서는 마음껏 나쁜 도파민을 즐기고,<br/>
+                  게임을 나가면 다시 현실로 돌아가<br/>
+                  자신의 삶에 집중하시길 바랍니다.<br/><br/>
+                  오늘도 화이팅! -김수지 드림-
+                </p>
+                <button 
+                  onClick={() => setShowDisclaimer(2)}
+                  className="w-full py-4 bg-[#ffd93d] text-black text-xs font-bold uppercase active:bg-[#e6c235]"
+                >
+                  확인했습니다
+                </button>
+              </motion.div>
+            </div>
+          ) : showDisclaimer === 2 ? (
+            <div key="disclaimer2" className="fixed inset-0 z-[300] flex items-center justify-center p-6 bg-black">
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                className="w-full max-w-md p-8 border-4 border-[#ffd93d] bg-[#1e1e2f] text-left"
+              >
+                <div className="text-center mb-6">
+                  <Wrench className="mx-auto text-[#ffd93d] mb-4" size={48} />
+                  <h2 className="text-lg text-[#ffd93d] font-bold">🎮 게임 방법</h2>
+                </div>
+                <div className="space-y-4 text-xs text-white leading-relaxed mb-8">
+                  <p>1. 이벤트 주기를 조절하며 발생하는 상황에 대응하세요.</p>
+                  <p>2. [기본] / [생계활동] / [도파민] / [소비] / [자립도] 탭을 활용해 캐릭터를 성장시켜보세요.</p>
+                  <p>3. 캐릭터를 과하게 혹사시키면 나쁜 방향으로 흘러갈 수 있으니 주의하세요.</p>
+                </div>
+                <button 
+                  onClick={() => setShowDisclaimer(0)}
+                  className="w-full py-4 bg-[#ffd93d] text-black text-xs font-bold uppercase active:bg-[#e6c235]"
+                >
+                  게임 시작하기
+                </button>
+              </motion.div>
+            </div>
+          ) : !isNameSet ? (
+            <div key="nameInput" className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/95">
               <motion.div 
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 20 }}
                 className="w-full max-w-sm p-8 border-4 border-[#3f3f5f] bg-[#1e1e2f] text-center"
               >
                 <h2 className="text-sm text-[#ffd93d] mb-6">당신의 이름을 입력하세요</h2>
@@ -594,6 +881,43 @@ export default function App() {
                   disabled={!tempNickname.trim()}
                 >
                   시작하기
+                </button>
+              </motion.div>
+            </div>
+          ) : null}
+        </AnimatePresence>
+
+        {/* Ending Screen */}
+        <AnimatePresence>
+          {ending && (
+            <div className="fixed inset-0 z-[400] flex items-center justify-center p-6 bg-black/95 overflow-y-auto">
+              <motion.div 
+                initial={{ opacity: 0, y: 50 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="w-full max-w-md p-8 border-8 border-[#3f3f5f] bg-[#1e1e2f] my-8"
+              >
+                <div className="text-center mb-8">
+                  <h1 className="text-xl font-black text-[#ffd93d] mb-2">{ending.title}</h1>
+                  <div className="h-1 w-20 bg-[#ffd93d] mx-auto"></div>
+                </div>
+                
+                <div className="bg-black/40 p-4 border-2 border-[#3f3f5f] mb-6">
+                  <p className="text-xs text-white leading-relaxed italic">
+                    "{ending.description}"
+                  </p>
+                </div>
+
+                <div className="bg-[#ffd93d]/10 p-4 border-2 border-[#ffd93d] mb-8">
+                  <p className="text-[10px] text-[#ffd93d] leading-relaxed font-bold">
+                    {ending.lesson}
+                  </p>
+                </div>
+
+                <button 
+                  onClick={() => window.location.reload()}
+                  className="w-full py-4 bg-white text-black text-xs font-bold uppercase hover:bg-gray-200 transition-colors"
+                >
+                  현실로 돌아가기 (다시 시작)
                 </button>
               </motion.div>
             </div>
@@ -641,6 +965,23 @@ export default function App() {
                 </button>
               </motion.div>
             </div>
+          )}
+        </AnimatePresence>
+
+        {/* Low Stat Warning */}
+        <AnimatePresence>
+          {lowStatWarning && !ending && (
+            <motion.div 
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="fixed top-20 left-1/2 -translate-x-1/2 z-[150] w-[90%] max-w-xs p-3 bg-[#ff6b6b] border-2 border-white text-white text-center shadow-lg"
+            >
+              <p className="text-[10px] font-bold flex items-center justify-center gap-2">
+                <AlertCircle size={14} />
+                {lowStatWarning}
+              </p>
+            </motion.div>
           )}
         </AnimatePresence>
       </div>
